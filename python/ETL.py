@@ -14,10 +14,14 @@ class ETL:
         self.df = None
         self.df_ontem = None
         self.df_conferencia = None
+        self.today = pd.Timestamp.today().date()
+        self.yesterday = self.today - pd.Timedelta(days=1)
+        self.dbf_yesterday = self.today - pd.Timedelta(days=2)
+    
 
     def extract(self):
-        xlsx_ontem = r"C:\Users\raphael.almeida\Documents\Processos\placas_movimentacoes\placas_movimentacoes_ontem.xlsx"
-        xlsx = r"C:\Users\raphael.almeida\Documents\Processos\placas_movimentacoes\placas_movimentacoes.xlsx"
+        xlsx_ontem = rf"C:\Users\raphael.almeida\Documents\Processos\placas_movimentacoes\placas_movimentacoes_{self.yesterday}.xlsx"
+        xlsx = rf"C:\Users\raphael.almeida\Documents\Processos\placas_movimentacoes\placas_movimentacoes_{self.today}.xlsx"
 
         self.df_ontem = pd.read_excel(xlsx_ontem, engine='openpyxl', sheet_name='ATIVAÇÕES')
         self.df = pd.read_excel(xlsx, engine='openpyxl', sheet_name='ATIVAÇÕES')
@@ -29,6 +33,14 @@ class ETL:
             query = file.read()
 
         self.df_conferencia = awr.athena.read_sql_query(query, database='silver')
+
+        dir_query = os.path.join(path, 'sql', 'all_boards_CANCELADOS.sql')
+
+        with open(dir_query, 'r') as file:
+            query = file.read()
+
+        self.df_cancelamentos = awr.athena.read_sql_query(query, database='silver')
+        
 
         return self.df, self.df_ontem
 
@@ -42,7 +54,7 @@ class ETL:
         else:
             df_desativados = pd.DataFrame(columns=self.df_ontem.columns)
 
-        xlsx_cancel_path = r"C:\Users\raphael.almeida\Documents\Processos\placas_movimentacoes\df_desativados.xlsx"
+        xlsx_cancel_path = r"C:\Users\raphael.almeida\OneDrive - Grupo Unus\analise de dados - Arquivos em excel\Relatório de Ativações Placas\placas_desativadas.xlsx"
         df_desativados.to_excel(xlsx_cancel_path, engine='openpyxl', index=False)
 
     def transform_process(self):
@@ -159,8 +171,27 @@ class ETL:
         return self.df
 
     def load(self):
-        xlsx_path = r"C:\Users\raphael.almeida\Documents\Processos\placas_movimentacoes\df_tratado.xlsx"
-        self.df.to_excel(xlsx_path, engine='openpyxl', index=False)
+
+        file_path = rf"C:\Users\raphael.almeida\Documents\Processos\placas_acompanhamento\template\placas_movimentacoes_{self.today}.xlsx"
+
+        destination_dir = r"C:\Users\raphael.almeida\OneDrive - Grupo Unus\analise de dados - Arquivos em excel\Relatório de Ativações Placas"
+        destination_path = os.path.join(destination_dir, os.path.basename(file_path))
+
+        destination_dir2 = r"C:\Users\raphael.almeida\Documents\Processos\placas_movimentacoes\bkp_activation"
+        destination_path2 = os.path.join(destination_dir2, os.path.basename(file_path))
+
+        with pd.ExcelWriter(destination_path, engine='openpyxl') as writer:
+            self.df.to_excel(writer, index=False, sheet_name='ATIVAÇÕES')
+            self.df_cancelamentos.to_excel(writer, index=False, sheet_name='CANCELAMENTOS')
+
+        with pd.ExcelWriter(destination_path2, engine='openpyxl') as writer:
+            self.df.to_excel(writer, index=False, sheet_name='ATIVAÇÕES')
+            self.df_cancelamentos.to_excel(writer, index=False, sheet_name='CANCELAMENTOS')
+
+        xlsx_rm_path = rf"C:\Users\raphael.almeida\OneDrive - Grupo Unus\analise de dados - Arquivos em excel\Relatório de Ativações Placas\placas_movimentacoes_{self.dbf_yesterday}.xlsx"
+        if os.path.exists(xlsx_rm_path):
+            os.remove(xlsx_rm_path)
+
 
 if __name__ == "__main__":
     etl = ETL()
