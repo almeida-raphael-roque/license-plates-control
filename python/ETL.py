@@ -20,8 +20,8 @@ class ETL:
     
 
     def extract(self):
-        xlsx_ontem = rf"C:\Users\raphael.almeida\Documents\Processos\placas_movimentacoes\placas_movimentacoes_{self.yesterday}.xlsx"
-        xlsx = rf"C:\Users\raphael.almeida\Documents\Processos\placas_movimentacoes\placas_movimentacoes_{self.today}.xlsx"
+        xlsx_ontem = rf"C:\Users\raphael.almeida\Documents\Processos\placas_movimentacoes\bkp_activation\placas_movimentacoes_{self.yesterday}.xlsx"
+        xlsx = rf"C:\Users\raphael.almeida\Documents\Processos\placas_movimentacoes\bkp_activation\placas_movimentacoes_{self.today}.xlsx"
 
         self.df_ontem = pd.read_excel(xlsx_ontem, engine='openpyxl', sheet_name='ATIVAÇÕES')
         self.df = pd.read_excel(xlsx, engine='openpyxl', sheet_name='ATIVAÇÕES')
