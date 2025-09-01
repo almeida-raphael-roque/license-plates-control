@@ -15,13 +15,22 @@ class ETL:
         self.df_ontem = None
         self.df_conferencia = None
         self.today = pd.Timestamp.today().date()
-        self.yesterday = self.today - pd.Timedelta(days=1)
-        self.dbf_yesterday = self.today - pd.Timedelta(days=2)
+
+        if self.today.weekday() == 0:
+            self.yesterday = self.today - pd.Timedelta(days=3)
+        else:
+            self.yesterday = self.today - pd.Timedelta(days=1)
+
+        if self.today.weekday() == 0:
+            self.dbf_yesterday = self.today - pd.Timedelta(days=4)
+        else:
+            self.dbf_yesterday = self.today - pd.Timedelta(days=2)
     
 
     def extract(self):
         xlsx_ontem = rf"C:\Users\raphael.almeida\Documents\Processos\placas_movimentacoes\bkp_activation\placas_movimentacoes_{self.yesterday}.xlsx"
         xlsx = rf"C:\Users\raphael.almeida\Documents\Processos\placas_movimentacoes\bkp_activation\placas_movimentacoes_{self.today}.xlsx"
+        
 
         self.df_ontem = pd.read_excel(xlsx_ontem, engine='openpyxl', sheet_name='ATIVAÇÕES')
         self.df = pd.read_excel(xlsx, engine='openpyxl', sheet_name='ATIVAÇÕES')
@@ -45,7 +54,7 @@ class ETL:
         return self.df, self.df_ontem
 
     def loading_deactived(self):
-        # Construir df_desativados: existiam ontem e não existem hoje
+        
         set_hoje = set(self.df['chassi'].dropna().unique()) if 'chassi' in self.df.columns else set()
 
         if 'chassi' in self.df_ontem.columns:
