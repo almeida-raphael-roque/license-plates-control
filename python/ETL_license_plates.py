@@ -20,14 +20,16 @@ logging.info('\n Executando Rotina: Movimentação de Placas')
 
 class ETL_boards:
 
+#EXTRACT
     def __init__(self):
         self.path = r"C:\Users\raphael.almeida\Documents\Processos\placas_movimentacoes"
         self.today = pd.Timestamp.today().date()
         self.df_ativacoes = None
         self.df_cancelamentos = None
+        self.df_conferencia = None
         self.df_final_ativacoes = None
         self.df_final_cancelamentos = None
-        #self.yesterday = self.today - pd.Timedelta(days=1)
+        self.yesterday = self.today - pd.Timedelta(days=1)
         #self.dbf_yesterday = self.today - pd.Timedelta(days=2)
 
     def extract_all_ativacoes(self):
@@ -61,8 +63,94 @@ class ETL_boards:
             logging.info('\n ----------------------------------------------------------------------------------')
             logging.info(f'\n Falha ao extrair a consulta de cancelamentos: {e}')
             return None
+    
+    def extract_conf_boards(self):
+
+        try:
+
+            dir_query = os.path.join(self.path,'sql', 'listagem_mestra.sql')
+
+            with open(dir_query, 'r') as file:
+                query = file.read()
+
+            self.df_conferencia = awr.athena.read_sql_query(query, database='silver')
+        
+            logging.info('\n ----------------------------------------------------------------------------------')
+            logging.info('\n Relatorio conferência  - Dados Extraidos com sucesso!')
+
+            return self.df_conferencia
+
+        except Exception as e:
+
+            logging.info('\n ----------------------------------------------------------------------------------')
+            logging.info(f'\n Falha ao Extrair relatorio conferência: {e}')
 
 # TRANSFORM
+    def board_status_treatment(self, df, df_conf, status_filter_list):
+
+        try:
+            if not df.empty:
+                logging.info('\n ----------------------------------------------------------------------------------')
+                logging.info(df.shape)
+                row_count = 0
+                for idx, row in df.iterrows():
+                    row_count += 1
+                    df_verification = df_conf[
+                        (df_conf['chassi'] == row['chassi']) & (df_conf['beneficio'] == row['beneficio'])
+                    ].sort_values(by='data_ativacao', ascending=True)
+
+                    if not df_verification.empty and len(df_verification['empresa'].values) > 1:
+                        hist_datas_ativacao = sorted(df_verification['data_ativacao_beneficio'].dropna().drop_duplicates().unique())
+
+                        if len(hist_datas_ativacao) > 1:
+                            penultimo_registro_data = hist_datas_ativacao[-2]
+                            verification_penultima_row = df_verification.loc[df_verification['data_ativacao_beneficio'] == penultimo_registro_data]
+                            
+                            if verification_penultima_row['status_beneficio'].values[0] not in status_filter_list:
+                                if verification_penultima_row['empresa'].values[0] != row['empresa']:
+                                    df.at[idx, 'status_beneficio'] = 'MIGRAÇÃO'
+                                    df.at[idx, 'migration_from'] = verification_penultima_row['empresa'].values[0]
+                                else:
+                                    df.at[idx, 'status_beneficio'] = 'RENOVAÇÃO'
+                                    df.at[idx, 'migration_from'] = 'NULL'
+                            else:
+                                # today = dt.datetime.today()
+                                # hist_datas_atualizacao = sorted(df_verification['data_atualizacao'].dropna().drop_duplicates().unique())
+                                # penultimo_registro_data_atualizacao = hist_datas_atualizacao[-2]
+                                # if today - penultimo_registro_data_atualizacao > dt.timedelta(days=30):
+                                    df.at[idx, 'status_beneficio'] = 'REATIVAÇÃO'
+                                    df.at[idx, 'migration_from'] = 'NULL'
+                                    
+                                # else:
+                                #     if verification_penultima_row ['empresa'].values[0] != row['empresa']:
+                                #         df.at[idx, 'status_beneficio'] = 'MIGRAÇÃO'
+                                #         df.at[idx, 'migration_from'] = verification_penultima_row['empresa'].values[0]
+                                #     else:
+                                #         df.at[idx, 'status_beneficio'] = 'RENOVAÇÃO'
+                                #         df.at[idx, 'migration_from'] = 'NULL'
+                                    
+                        else:
+                            df.at[idx, 'status_beneficio'] = 'NOVO'
+                            df.at[idx, 'migration_from'] = 'NULL'
+                    else:
+                        df.at[idx, 'status_beneficio'] = 'NOVO'
+                        df.at[idx, 'migration_from'] = 'NULL'
+
+                logging.info('\n ----------------------------------------------------------------------------------')
+                logging.info(f'Total de linhas processadas: {row_count}')
+
+            else:
+                logging.info('\n ----------------------------------------------------------------------------------')
+                logging.info('Nnehum registro de ativações para tratamento de dados. Dataframe vazio!')
+
+
+        except Exception as e:
+
+            logging.info('\n ----------------------------------------------------------------------------------')
+            logging.info(f'Falha no tratamento de status das placas ativadas. Revise o código: {e}')
+
+        return df
+
     def transforming_files(self):
 
         #DEFININDO DATAFRAMES VAZIOS 
@@ -129,6 +217,26 @@ class ETL_boards:
         except Exception as e:
             logging.info('\n ----------------------------------------------------------------------------------')
             logging.info(f'Falha na criação da coluna de migração e concatenação de dataframes: {e}')
+
+        # CRIANDO LISTA DE VERIFICAÇÃOST DE PLACAS MIGRADAS (STATUS)
+        status_filter_list = ['CANCELADO', 'CANCELADA', 'FINALIZADO', 'FINALIZADA', 'NAO RENOVADO']
+        
+        try:
+            # PEGANDO DADOS DE ATIVAÇÃO DO DIA ANTERIOR
+            if not df_final_ativacoes.empty:
+                df_ativos_menos_ontem = df_final_ativacoes[~(df_final_ativacoes['data_ativacao_beneficio'] == self.yesterday)]
+                df_ativos_dia_anterior = df_final_ativacoes[df_final_ativacoes['data_ativacao_beneficio'] == self.yesterday]
+                df_ativacoes_dia_anterior_ranking_tratado = self.board_status_treatment(df_ativos_dia_anterior, self.df_conferencia, status_filter_list)
+                df_final_ativacoes = pd.concat([df_ativos_menos_ontem, df_ativacoes_dia_anterior_ranking_tratado])
+                
+                logging.info('\n ----------------------------------------------------------------------------------')
+                logging.info(f'Número de registros ativos na carteira tratado com os dados do dia anterior.')
+
+        except Exception as e:
+
+            logging.info('\n ----------------------------------------------------------------------------------')
+            logging.info(f'Falha ao incluir registros ativos referente ao dia anterior na contagem . Revise o código: {e}')
+
 
         # DEFININDO COLUNAS QUE SERÃO UTILIZADAS NO DATAFRAME FINAL
         try:
@@ -218,6 +326,8 @@ class ETL_boards:
                     self.extract_all_ativacoes()
                 if self.df_cancelamentos is None:
                     self.extract_all_cancelamentos()
+                if self.df_conferencia is None:
+                    self.extract_conf_boards()
                 self.transforming_files()
 
             file_path = rf"C:\Users\raphael.almeida\Documents\Processos\placas_acompanhamento\template\placas_movimentacoes_{self.today}.xlsx"
