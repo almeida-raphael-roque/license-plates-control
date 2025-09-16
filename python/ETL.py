@@ -84,8 +84,16 @@ class ETL:
             set_ontem = set(self.df_ontem['chassi'].dropna().unique()) if 'chassi' in self.df_ontem.columns else set()
 
             # Classificar status_beneficio em df
+             
             if 'chassi' in self.df.columns:
-                self.df['status_beneficio'] = np.where(self.df['chassi'].isin(set_ontem), 'ATIVO', 'NOVO')
+                mask = self.df['chassi'].isin(set_ontem)
+                # Só altera status_beneficio para 'ATIVO' ou 'NOVO' nas linhas onde status_beneficio não é diferente de 'ATIVO'
+                if 'status_beneficio' in self.df.columns:
+                    mask_to_update = self.df['status_beneficio'].eq('ATIVO') | self.df['status_beneficio'].isna()
+                else:
+                    mask_to_update = pd.Series([True] * len(self.df), index=self.df.index)
+                self.df.loc[mask & mask_to_update, 'status_beneficio'] = 'ATIVO'
+                self.df.loc[~mask & mask_to_update, 'status_beneficio'] = 'NOVO'
             if 'migration_from' not in self.df.columns:
                 self.df['migration_from'] = 'NULL'
 

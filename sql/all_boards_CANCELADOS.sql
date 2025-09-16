@@ -171,7 +171,7 @@ CTE_tag AS (
         cast(irs.date_cancellation as date) as "data_cancelamento",
         irs.user_name_cancellation as "usuario_cancelamento",
         current_date AS "data_filtro",
-        'Viavante' as empresa,
+        'Tag' as empresa,
         irh.data_registration as "data_registro_historico",
         -- irh.note as "Migração conferencia",
         CASE

@@ -29,8 +29,11 @@ class ETL_boards:
         self.df_conferencia = None
         self.df_final_ativacoes = None
         self.df_final_cancelamentos = None
-        self.yesterday = self.today - pd.Timedelta(days=1)
-        #self.dbf_yesterday = self.today - pd.Timedelta(days=2)
+        if self.today.weekday() == 0:  # 
+            self.yesterday = self.today - pd.Timedelta(days=3)
+        else:
+            self.yesterday = self.today - pd.Timedelta(days=1)
+       
 
     def extract_all_ativacoes(self):
 
@@ -224,10 +227,12 @@ class ETL_boards:
         try:
             # PEGANDO DADOS DE ATIVAÇÃO DO DIA ANTERIOR
             if not df_final_ativacoes.empty:
-                df_ativos_menos_ontem = df_final_ativacoes[~(df_final_ativacoes['data_ativacao_beneficio'] == self.yesterday)]
+                df_ativos_sem_hoje_ontem = df_final_ativacoes[
+                    ~df_final_ativacoes['data_ativacao_beneficio'].isin([self.today, self.yesterday])
+                ]
                 df_ativos_dia_anterior = df_final_ativacoes[df_final_ativacoes['data_ativacao_beneficio'] == self.yesterday]
                 df_ativacoes_dia_anterior_ranking_tratado = self.board_status_treatment(df_ativos_dia_anterior, self.df_conferencia, status_filter_list)
-                df_final_ativacoes = pd.concat([df_ativos_menos_ontem, df_ativacoes_dia_anterior_ranking_tratado])
+                df_final_ativacoes = pd.concat([df_ativos_sem_hoje_ontem, df_ativacoes_dia_anterior_ranking_tratado])
                 
                 logging.info('\n ----------------------------------------------------------------------------------')
                 logging.info(f'Número de registros ativos na carteira tratado com os dados do dia anterior.')
