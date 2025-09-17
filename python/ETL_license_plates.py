@@ -133,10 +133,10 @@ class ETL_boards:
                                 #         df.at[idx, 'migration_from'] = 'NULL'
                                     
                         else:
-                            df.at[idx, 'status_beneficio'] = 'NOVO'
+                            df.at[idx, 'status_beneficio'] = 'ATIVO'
                             df.at[idx, 'migration_from'] = 'NULL'
                     else:
-                        df.at[idx, 'status_beneficio'] = 'NOVO'
+                        df.at[idx, 'status_beneficio'] = 'ATIVO'
                         df.at[idx, 'migration_from'] = 'NULL'
 
                 logging.info('\n ----------------------------------------------------------------------------------')
@@ -180,10 +180,10 @@ class ETL_boards:
                         
             df_ativ_all_boards['beneficio'] = df_ativ_all_boards['beneficio'].replace('REPARAÇÃO OU REPOSIÇÃO DO VEÍCULO', 'CASCO (VEÍCULO)').replace('REPARAÇÃO OU REPOSIÇÃO DO (SEMI)REBOQUE', 'CASCO (R/SR)').replace('REPARAÇÃO OU REPOSIÇÃO DO COMPLEMENTO', 'CASCO (COMPLEMENTO)')
             
-            df_ativ_viavante = df_ativ_all_boards[df_ativ_all_boards['empresa'] == 'Viavante']
-            df_ativ_stcoop = df_ativ_all_boards[df_ativ_all_boards['empresa'] == 'Stcoop']
-            df_ativ_segtruck = df_ativ_all_boards[df_ativ_all_boards['empresa'] == 'Segtruck']
-            df_ativ_tag = df_ativ_all_boards[df_ativ_all_boards['empresa'] == 'Tag']
+            #df_ativ_viavante = df_ativ_all_boards[df_ativ_all_boards['empresa'] == 'Viavante']
+            #df_ativ_stcoop = df_ativ_all_boards[df_ativ_all_boards['empresa'] == 'Stcoop']
+            #df_ativ_segtruck = df_ativ_all_boards[df_ativ_all_boards['empresa'] == 'Segtruck']
+            #df_ativ_tag = df_ativ_all_boards[df_ativ_all_boards['empresa'] == 'Tag']
 
             df_final_cancelamentos = df_final_cancelamentos
 
@@ -193,26 +193,27 @@ class ETL_boards:
             logging.info(f'Falha ao realizar a segmentação dos dataframes: {e}')
 
         # SELECIONANDO APENAS AS ATIVAÇÕES CORRESPONDENTES AOS BENEFICIOS 'CASCO' / 'TERCEIRO' POR UM REGEX PADRÃO
-        try:
-            ids_beneficios_segtruck = [2, 3, 4, 7, 24, 25, 26, 29]
-            ids_beneficios_stcoop = [24, 25, 26, 29]
-            ids_beneficios_viavante = [40, 41, 42, 45]
-            ids_beneficios_tag = [2, 3, 4, 7, 24, 25, 26, 29, 34, 35, 36, 37, 38, 39]
+        # try:
+        #     ids_beneficios_segtruck = [2, 3, 4, 7, 24, 25, 26, 29]
+        #     ids_beneficios_stcoop = [24, 25, 26, 29]
+        #     ids_beneficios_viavante = [40, 41, 42, 45]
+        #     ids_beneficios_tag = [2, 3, 4, 7, 24, 25, 26, 29, 34, 35, 36, 37, 38, 39]
 
-            df_ativ_viavante = df_ativ_viavante.loc[df_ativ_viavante['id_beneficio'].isin(ids_beneficios_viavante)]
-            df_ativ_stcoop = df_ativ_stcoop[df_ativ_stcoop['id_beneficio'].isin(ids_beneficios_stcoop)]
-            df_ativ_segtruck = df_ativ_segtruck.loc[df_ativ_segtruck['id_beneficio'].isin(ids_beneficios_segtruck)]
-            df_ativ_tag = df_ativ_tag.loc[df_ativ_tag['id_beneficio'].isin(ids_beneficios_tag)]
+        #     df_ativ_viavante = df_ativ_viavante.loc[df_ativ_viavante['id_beneficio'].isin(ids_beneficios_viavante)]
+        #     df_ativ_stcoop = df_ativ_stcoop[df_ativ_stcoop['id_beneficio'].isin(ids_beneficios_stcoop)]
+        #     df_ativ_segtruck = df_ativ_segtruck.loc[df_ativ_segtruck['id_beneficio'].isin(ids_beneficios_segtruck)]
+        #     df_ativ_tag = df_ativ_tag.loc[df_ativ_tag['id_beneficio'].isin(ids_beneficios_tag)]
 
-        except Exception as e:
+        # except Exception as e:
 
-            logging.info('\n ----------------------------------------------------------------------------------')  
-            logging.info(f'Falha ao padronizar nomenclaturas referente aos beneficios pré-estabelecidos: {e}')
+        #     logging.info('\n ----------------------------------------------------------------------------------')  
+        #     logging.info(f'Falha ao padronizar nomenclaturas referente aos beneficios pré-estabelecidos: {e}')
 
         # CONCATENANDO E CRIANDO COLUNA DE MIGRAÇÃO (MIGRATION_FROM) 
         try:
 
-            df_final_ativacoes = pd.concat([df_ativ_viavante, df_ativ_stcoop, df_ativ_segtruck, df_ativ_tag])
+            #df_final_ativacoes = pd.concat([df_ativ_viavante, df_ativ_stcoop, df_ativ_segtruck, df_ativ_tag])
+            df_final_ativacoes = df_ativ_all_boards
 
             if not df_final_ativacoes.empty:
                 df_final_ativacoes['migration_from'] = np.nan
@@ -226,13 +227,10 @@ class ETL_boards:
         
         try:
             # PEGANDO DADOS DE ATIVAÇÃO DO DIA ANTERIOR
-            if not df_final_ativacoes.empty:
-                df_ativos_sem_hoje_ontem = df_final_ativacoes[
-                    ~df_final_ativacoes['data_ativacao_beneficio'].isin([self.today, self.yesterday])
-                ]
-                df_ativos_dia_anterior = df_final_ativacoes[df_final_ativacoes['data_ativacao_beneficio'] == self.yesterday]
+
+                df_ativos_dia_anterior = df_final_ativacoes[df_final_ativacoes['data_ativacao'] == self.yesterday]
                 df_ativacoes_dia_anterior_ranking_tratado = self.board_status_treatment(df_ativos_dia_anterior, self.df_conferencia, status_filter_list)
-                df_final_ativacoes = pd.concat([df_ativos_sem_hoje_ontem, df_ativacoes_dia_anterior_ranking_tratado])
+                df_final_ativacoes = pd.concat([df_ativacoes_dia_anterior_ranking_tratado, df_final_ativacoes])
                 
                 logging.info('\n ----------------------------------------------------------------------------------')
                 logging.info(f'Número de registros ativos na carteira tratado com os dados do dia anterior.')
@@ -248,7 +246,7 @@ class ETL_boards:
            
             df_final_ativacoes = df_final_ativacoes[[
                 'placa', 'chassi', 'id_placa', 'id_veiculo', 'id_carroceria', 'matricula', 'conjunto', 'unidade', 'consultor', 'status_beneficio', 
-                'cliente', 'data_registro', 'data_ativacao_beneficio', 'suporte', 'data_filtro', 'empresa', 'migration_from'
+                'cliente', 'data_registro', 'data_ativacao', 'data_ativacao_beneficio', 'suporte', 'data_filtro', 'empresa', 'migration_from'
             ]]
 
             logging.info('\n ----------------------------------------------------------------------------------')
@@ -260,7 +258,7 @@ class ETL_boards:
 
         # RETIRANDO DUPLICATAS
         try:
-            df_final_ativacoes = df_final_ativacoes.drop_duplicates(subset=['chassi'])
+            df_final_ativacoes = df_final_ativacoes.drop_duplicates(subset=['chassi'], keep = 'first')
 
             logging.info('\n ----------------------------------------------------------------------------------')
             logging.info(f'Duplicatas retiradas com sucesso.')
