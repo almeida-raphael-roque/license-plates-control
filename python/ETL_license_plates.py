@@ -267,6 +267,58 @@ class ETL_boards:
             logging.info('\n ----------------------------------------------------------------------------------')
             logging.info(f'Falha ao retirar duplicatas. Revise o código: {e}')
 
+        # DEFINIR 'NOVO' APENAS PARA CHASSIS QUE NÃO EXISTIAM ATÉ ONTEM
+        try:
+            if not df_final_ativacoes.empty and 'chassi' in df_final_ativacoes.columns:
+                # Normalização
+                df_final_ativacoes['chassi'] = df_final_ativacoes['chassi'].astype(str).str.strip().str.upper()
+
+                # Determinar conjunto de chassis existentes até ontem
+                set_ate_ontem = set()
+                conf = getattr(self, 'df_conferencia', None)
+                if conf is not None and not conf.empty and 'chassi' in conf.columns:
+                    conf_norm = conf.copy()
+                    conf_norm['chassi'] = conf_norm['chassi'].astype(str).str.strip().str.upper()
+                    # Preferir coluna 'data_ativacao' se existir, senão usar 'data_ativacao_beneficio'
+                    data_col = 'data_ativacao' if 'data_ativacao' in conf_norm.columns else (
+                        'data_ativacao_beneficio' if 'data_ativacao_beneficio' in conf_norm.columns else None
+                    )
+                    if data_col is not None:
+                        conf_norm[data_col] = pd.to_datetime(conf_norm[data_col], errors='coerce').dt.date
+                        set_ate_ontem = set(conf_norm.loc[conf_norm[data_col] <= self.yesterday, 'chassi'].dropna().unique())
+                    else:
+                        set_ate_ontem = set(conf_norm['chassi'].dropna().unique())
+                else:
+                    # Fallback: usar o próprio dataset atual para considerar registros com data <= ontem
+                    data_col = 'data_ativacao' if 'data_ativacao' in df_final_ativacoes.columns else (
+                        'data_ativacao_beneficio' if 'data_ativacao_beneficio' in df_final_ativacoes.columns else None
+                    )
+                    if data_col is not None:
+                        tmp = df_final_ativacoes.copy()
+                        tmp[data_col] = pd.to_datetime(tmp[data_col], errors='coerce').dt.date
+                        set_ate_ontem = set(tmp.loc[tmp[data_col] <= self.yesterday, 'chassi'].dropna().unique())
+
+                # Máscara de hoje (se disponível) para classificar apenas o dia atual
+                mask_hoje = pd.Series([True] * len(df_final_ativacoes), index=df_final_ativacoes.index)
+                if 'data_ativacao' in df_final_ativacoes.columns:
+                    mask_hoje = pd.to_datetime(df_final_ativacoes['data_ativacao'], errors='coerce').dt.date.eq(self.today)
+                elif 'data_ativacao_beneficio' in df_final_ativacoes.columns:
+                    mask_hoje = pd.to_datetime(df_final_ativacoes['data_ativacao_beneficio'], errors='coerce').dt.date.eq(self.today)
+
+                # Inicializar status padrão ATIVO quando vazio
+                if 'status_beneficio' not in df_final_ativacoes.columns:
+                    df_final_ativacoes['status_beneficio'] = np.nan
+                mask_vazio_ou_ativo = df_final_ativacoes['status_beneficio'].isna() | df_final_ativacoes['status_beneficio'].eq('ATIVO')
+                df_final_ativacoes.loc[mask_vazio_ou_ativo, 'status_beneficio'] = 'ATIVO'
+
+                # Definir NOVO apenas para chassis de hoje que não existiam até ontem
+                mask_novo = mask_hoje & ~df_final_ativacoes['chassi'].isin(list(set_ate_ontem))
+                df_final_ativacoes.loc[mask_novo, 'status_beneficio'] = 'NOVO'
+
+        except Exception as e:
+            logging.info('\n ----------------------------------------------------------------------------------')
+            logging.info(f"Falha ao classificar 'NOVO' por comparação de ontem para hoje: {e}")
+
         # TRATANDO DADOS NULOS NOS DATAFRAMES
         try:
             df_final_ativacoes['placa'] = df_final_ativacoes['placa'].fillna('SEM-PLACA')
